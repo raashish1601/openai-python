@@ -8,6 +8,7 @@ from inline_snapshot import snapshot
 
 from openai import OpenAI, AsyncOpenAI
 from openai._utils import assert_signatures_in_sync
+from openai.types.responses import Response
 
 from ...conftest import base_url
 from ..snapshots import make_snapshot_request
@@ -39,6 +40,113 @@ def test_output_text(client: OpenAI, respx_mock: MockRouter) -> None:
     assert response.output_text == snapshot(
         "I can't provide real-time updates, but you can easily check the current weather in San Francisco using a weather website or app. Typically, San Francisco has cool, foggy summers and mild winters, so it's good to be prepared for variable weather!"
     )
+
+
+def test_output_as_input_strips_absent_output_only_fields() -> None:
+    response = Response.construct(
+        id="resp_123",
+        created_at=0.0,
+        model="gpt-4o-mini",
+        object="response",
+        output=[
+            {
+                "id": "rs_123",
+                "type": "reasoning",
+                "summary": [{"type": "summary_text", "text": "Reasoning summary"}],
+            },
+            {
+                "id": "msg_123",
+                "type": "message",
+                "status": "completed",
+                "role": "assistant",
+                "phase": "final_answer",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "annotations": [],
+                        "logprobs": [],
+                        "text": "Hello again",
+                    }
+                ],
+            },
+        ],
+        parallel_tool_calls=False,
+        tool_choice="auto",
+        tools=[],
+    )
+
+    assert response.output_as_input == [
+        {
+            "id": "rs_123",
+            "type": "reasoning",
+            "summary": [{"type": "summary_text", "text": "Reasoning summary"}],
+        },
+        {
+            "id": "msg_123",
+            "type": "message",
+            "status": "completed",
+            "role": "assistant",
+            "phase": "final_answer",
+            "content": [
+                {
+                    "type": "output_text",
+                    "annotations": [],
+                    "logprobs": [],
+                    "text": "Hello again",
+                }
+            ],
+        },
+    ]
+
+
+def test_output_as_input_preserves_explicit_nulls_and_drops_created_by() -> None:
+    response = Response.construct(
+        id="resp_123",
+        created_at=0.0,
+        model="gpt-4o-mini",
+        object="response",
+        output=[
+            {
+                "id": "ig_123",
+                "type": "image_generation_call",
+                "status": "completed",
+                "result": None,
+            },
+            {
+                "id": "cc_out_123",
+                "call_id": "call_123",
+                "type": "computer_call_output",
+                "status": "completed",
+                "created_by": "assistant",
+                "output": {
+                    "type": "computer_screenshot",
+                    "image_url": "https://example.com/screenshot.png",
+                },
+            },
+        ],
+        parallel_tool_calls=False,
+        tool_choice="auto",
+        tools=[],
+    )
+
+    assert response.output_as_input == [
+        {
+            "id": "ig_123",
+            "type": "image_generation_call",
+            "status": "completed",
+            "result": None,
+        },
+        {
+            "id": "cc_out_123",
+            "call_id": "call_123",
+            "type": "computer_call_output",
+            "status": "completed",
+            "output": {
+                "type": "computer_screenshot",
+                "image_url": "https://example.com/screenshot.png",
+            },
+        },
+    ]
 
 
 @pytest.mark.parametrize("sync", [True, False], ids=["sync", "async"])

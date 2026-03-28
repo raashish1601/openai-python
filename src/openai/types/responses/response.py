@@ -10,6 +10,7 @@ from .response_usage import ResponseUsage
 from .response_prompt import ResponsePrompt
 from .response_status import ResponseStatus
 from .tool_choice_mcp import ToolChoiceMcp
+from ...lib._responses import output_as_input
 from ..shared.metadata import Metadata
 from ..shared.reasoning import Reasoning
 from .tool_choice_shell import ToolChoiceShell
@@ -23,6 +24,7 @@ from .response_text_config import ResponseTextConfig
 from .tool_choice_function import ToolChoiceFunction
 from ..shared.responses_model import ResponsesModel
 from .tool_choice_apply_patch import ToolChoiceApplyPatch
+from .response_input_item_param import ResponseInputItemParam
 
 __all__ = ["Response", "IncompleteDetails", "ToolChoice", "Conversation"]
 
@@ -319,3 +321,13 @@ class Response(BaseModel):
                         texts.append(content.text)
 
         return "".join(texts)
+
+    @property
+    def output_as_input(self) -> List[ResponseInputItemParam]:
+        """Replay-safe input items derived from this response's output.
+
+        This is useful for manually continuing a Responses API conversation with
+        `previous_response_id=None` by passing `response.output_as_input` back to
+        `client.responses.create(input=...)`.
+        """
+        return output_as_input(self.output)
